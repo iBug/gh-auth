@@ -1,12 +1,15 @@
 github:
   client_id: "Register your client on GitHub!"
   client_secret: "Register your client on GitHub!"
+
 cas:
   url: "https://passport.ustc.edu.cn/login"
   validate: "https://passport.ustc.edu.cn/serviceValidate"
   redirect: "http://home.ustc.edu.cn/~zzh1996/cas_redirect.html"
   logout: "https://passport.ustc.edu.cn/logout"
+
 session_key: "Secret for HMAC signature"
+session_expiry: 600  # seconds
 token_key: "Passphrase for AES"
 
 admins:
