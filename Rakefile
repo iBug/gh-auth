@@ -5,7 +5,7 @@ require 'rake/clean'
 require 'zip'
 
 ZIP_FILE = 'package.zip'
-FILES = ['main.rb'] + Dir.glob('*.yaml')
+FILES = %w[main.rb config.yml] + Dir.glob('templates/**')
 CLEAN.include ZIP_FILE
 
 task :default => :deploy
