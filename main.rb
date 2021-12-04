@@ -34,14 +34,14 @@ class Template
     end
 
     def base
-      @base ||= self.new
+      @base ||= new
     end
   end
 end
 
 module ERBHelper
   def h(s)
-    CGI::escapeHTML s
+    CGI.escapeHTML s
   end
 end
 
@@ -72,10 +72,11 @@ class RequestHandler
   def id_from_cookie(cookie_name)
     id, timestamp, sig = cookies[cookie_name].split('+')
     hmac = hmac_sha1(CONFIG['session_key'], "#{id}+#{timestamp}")
-    fail unless hmac == sig
-    fail unless Time.now.to_i < timestamp.to_i + CONFIG['session_expiry']
+    raise unless hmac == sig
+    raise unless Time.now.to_i < timestamp.to_i + CONFIG['session_expiry']
+
     id
-  rescue
+  rescue StandardError
   end
 
   def user_ustc
@@ -90,6 +91,11 @@ class RequestHandler
     case @req_path
     when '/'
       render 'index'
+    when '/robots.txt'
+      @res_body = "User-agent: *\nDisallow: /\n"
+    else
+      @res_body = "Not found\n"
+      @res_code = 404
     end
 
     [@res_body, @res_code, @res_headers]
