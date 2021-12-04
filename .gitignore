@@ -1,3 +1,7 @@
+# Config - MAY CONTAIN SENSITIVE INFORMATION
+config.yml
+
+# Serverless function deployment
 package.zip
 
 # Standard Ruby files
