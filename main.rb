@@ -6,6 +6,7 @@ require 'cgi'
 require 'erb'
 require 'json'
 require 'net/http'
+require 'nokogiri'
 require 'openssl'
 require 'securerandom'
 require 'time'
@@ -17,6 +18,10 @@ CONFIG = YAML.load_file('config.yml')
 def hmac_sha1(key, data)
   digest = OpenSSL::Digest.new('sha1')
   OpenSSL::HMAC.hexdigest(digest, key, data)
+end
+
+def admins
+  CONFIG['admins']
 end
 
 class Template
@@ -69,6 +74,11 @@ class RequestHandler
     @cookies ||= CGI::Cookie.parse(@req_headers['Cookie'])
   end
 
+  def set_cookie(name, value, expires = nil)
+    @res_headers['Set-Cookie'] ||= []
+    @res_headers['Set-Cookie'] << CGI::Cookie.new('name' => name, 'value' => value, 'expires' => expires).to_s
+  end
+
   def id_from_cookie(cookie_name)
     id, timestamp, sig = cookies[cookie_name].split('+')
     hmac = hmac_sha1(CONFIG['session_key'], "#{id}+#{timestamp}")
@@ -93,6 +103,9 @@ class RequestHandler
       render 'index'
     when '/robots.txt'
       @res_body = "User-agent: *\nDisallow: /\n"
+    when '/logout'
+      set_cookie 'user_ustc', '', Time.at(0)
+      set_cookie 'user_github', '', Time.at(0)
     else
       @res_body = "Not found\n"
       @res_code = 404
@@ -108,7 +121,14 @@ def entrypoint(event:, context:)
   query_params = event['queryStringParameters'] || {}
   output, status_code, headers = RequestHandler.new(url_path, query_params, event['headers']).handle
 
-  headers['Content-Type'] ||= 'text/html'
+  headers['Content-Type'] ||= 'text/plain'
+  mvheaders, headers = headers.partition { |_, v| v.is_a? Array }.map(&:to_h)
+  mvheaders.each do |k, v|
+    v.each_with_index do |v_, idx|
+      k_ = k.chars.map { |c| c.send(%i[upcase downcase].sample) }.join
+      headers[k_] = v_
+    end
+  end
   { statusCode: status_code, headers: headers, body: output }
 rescue StandardError => e
   warn ([e.message] + e.backtrace).join $/
@@ -121,7 +141,7 @@ def main
   arg_uri = URI(ARGV[0].to_s)
   r = entrypoint(event: {
                    'rawPath' => arg_uri.path,
-                   'queryStringParameters' => arg_uri.query && URI.decode_www_form(arg_uri.query).to_h,
+                   'queryStringParameters' => URI.decode_www_form(arg_uri.query || '').to_h,
                    'headers' => {}
                  }, context: {})
   if r[:statusCode] == 200

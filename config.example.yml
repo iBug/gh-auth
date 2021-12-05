@@ -15,6 +15,7 @@ cas:
 session_key: "Secret for HMAC signature"
 session_expiry: 600
 token_key: "Passphrase for AES"
+# Note: No token expiry
 
 admins:
   - PB12345678
