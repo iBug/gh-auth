@@ -1,0 +1,13 @@
+<main class="card">
+  <h1 class="card-header">USTC-GitHub Authenticator</h1>
+  <div class="card-body">
+    <% if token %>
+      <p>Your authentication token: <code><%= h(token) %></code></p>
+    <% else %>
+      <p>You must authenticate with both USTC CAS and GitHub before you can generate your token.</p>
+    <% end %>
+  </div>
+  <div class="card-footer btn-space-y">
+    <a href="./" class="btn btn-secondary">Back</a>
+  </div>
+</main>

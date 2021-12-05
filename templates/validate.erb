@@ -1,0 +1,26 @@
+<main class="card">
+  <h1 class="card-header">USTC-GitHub Authenticator</h1>
+  <div class="card-body">
+    <form method="post">
+      <div class="form-group">
+        <label for="token">Token</label>
+        <input type="text" class="form-control" id="token" name="token" placeholder="T8888:Octocat:0123456789abcdef0123456789abcdef">
+      </div>
+      <button type="submit" class="btn btn-primary">Check</button>
+    </form>
+    <% unless @validate_token.nil? %>
+      <% if @validate_token %>
+        <div class="alert alert-success mt-3" role="alert">
+          <strong>Good</strong>: The token <code><%= h(@token) %></code> is valid.
+        </div>
+      <% else %>
+        <div class="alert alert-danger mt-3" role="alert">
+          <strong>Bad</strong>: The token <code><%= h(@token) %></code> is <b>invalid</b>.
+        </div>
+      <% end %>
+    <% end %>
+  </div>
+  <div class="card-footer btn-space-y">
+    <a href="./" class="btn btn-secondary">Back</a>
+  </div>
+</main>

@@ -7,6 +7,7 @@
   <div class="card-footer btn-space-y">
     <a href="auth-ustc" class="btn btn-primary">Authenticate USTC</a>
     <a href="auth-github" class="btn btn-primary">Authenticate GitHub</a>
+    <a href="token" class="btn btn-success<%= ' disabled' unless user_ustc && user_github %>">Token</a>
     <a href="logout" class="btn btn-secondary">Logout</a>
   </div>
 </main>

@@ -12,11 +12,7 @@ cas:
   redirect: "http://home.ustc.edu.cn/~zzh1996/cas_redirect.html"
   logout: "https://passport.ustc.edu.cn/logout"
 
-session_key: "Secret for HMAC signature"
+session_key: "Secret for cookie signature"
 session_expiry: 600
-token_key: "Passphrase for AES"
+token_key: "Secret for token signature"
 # Note: No token expiry
-
-admins:
-  - PB12345678
-  - T8888
