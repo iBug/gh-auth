@@ -14,7 +14,7 @@ require 'time'
 require 'yaml'
 
 TEMPLATE_DIR = 'templates'
-CONFIG = YAML.load_file('config.yml')
+CONFIG = YAML.load(ERB.new(File.read('config.yml')).result)
 
 def hmac_signature(key, data)
   digest = OpenSSL::Digest.new('sha1')
