@@ -70,23 +70,35 @@ class RequestHandler
     @res_headers['Content-Type'] = 'text/html'
   end
 
+  def redirect(target, code=302)
+    @res_code = code
+    @res_headers['Location'] = target
+  end
+
   def cookies
     @cookies ||= CGI::Cookie.parse(@req_headers['Cookie'])
   end
 
-  def set_cookie(name, value, expires = nil)
+  def set_cookie(name, value = nil, expires = nil)
+    expires ||= Time.now + CONFIG['session_expiry']
+    if value.nil?
+      value = ''
+      expires = Time.at(0)
+    end
     @res_headers['Set-Cookie'] ||= []
-    @res_headers['Set-Cookie'] << CGI::Cookie.new('name' => name, 'value' => value, 'expires' => expires).to_s
+    @res_headers['Set-Cookie'] << CGI::Cookie.new('name' => name, 'value' => value, 'path' => '/', 'expires' => expires).to_s
   end
 
   def id_from_cookie(cookie_name)
+    return unless cookies.key? cookie_name
     id, timestamp, sig = cookies[cookie_name].split('+')
     hmac = hmac_sha1(CONFIG['session_key'], "#{id}+#{timestamp}")
     raise unless hmac == sig
     raise unless Time.now.to_i < timestamp.to_i + CONFIG['session_expiry']
 
     id
-  rescue StandardError
+  rescue StandardError => e
+    set_cookie cookie_name
   end
 
   def user_ustc
@@ -106,6 +118,11 @@ class RequestHandler
     when '/logout'
       set_cookie 'user_ustc', '', Time.at(0)
       set_cookie 'user_github', '', Time.at(0)
+      render 'logout'
+    when '/logout-ustc'
+      redirect CONFIG['cas']['logout']
+    when '/logout-github'
+      redirect './'
     else
       @res_body = "Not found\n"
       @res_code = 404
