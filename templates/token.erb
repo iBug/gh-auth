@@ -2,7 +2,8 @@
   <h1 class="card-header">USTC-GitHub Authenticator</h1>
   <div class="card-body">
     <% if token %>
-      <p>Your authentication token: <code><%= h(token) %></code></p>
+      <p>Your authentication token: <code id="token"><%= h(token) %></code></p>
+      <p><button id="copy-token" class="btn btn-primary"><i class="fas fa-copy"></i> Copy</button></p>
     <% else %>
       <p>You must authenticate with both USTC CAS and GitHub before you can generate your token.</p>
     <% end %>
@@ -11,3 +12,51 @@
     <a href="./" class="btn btn-secondary">Back</a>
   </div>
 </main>
+<script>
+  (function() {
+    const copyText = function(text) {
+      var textarea = document.createElement('textarea');
+      // Prevent zooming on iOS
+      textarea.style.fontSize = '12pt';
+      // Reset box model
+      textarea.style.border = '0';
+      textarea.style.padding = '0';
+      textarea.style.margin = '0';
+      // Move element out of screen horizontally
+      textarea.style.position = 'absolute';
+      textarea.style['left'] = '-9999px';
+      // Move element to the same position vertically
+      let yPosition = window.pageYOffset || document.documentElement.scrollTop;
+      textarea.style.top = yPosition + "px";
+
+      textarea.setAttribute('readonly', '');
+      textarea.value = text;
+      document.body.appendChild(textarea);
+
+      let success = true;
+      try {
+        textarea.select();
+        success = document.execCommand("copy");
+      } catch {
+        success = false;
+      }
+      textarea.parentNode.removeChild(textarea);
+      return success;
+    };
+    const copyButtonEventListener = function(event) {
+      const target = event.target;
+      const token = document.getElementById('token');
+      res = copyText(token.textContent);
+      target.classList.add("btn-success");
+      target.classList.remove("btn-primary");
+      target.innerHTML = '<i class="fas fa-check"></i> Copied';
+      setTimeout(function() {
+        target.classList.add("btn-primary");
+        target.classList.remove("btn-success");
+        target.innerHTML = '<i class="fas fa-copy"></i> Copy';
+      }, 2000);
+      return res;
+    };
+    document.getElementById("copy-token").addEventListener("click", copyButtonEventListener);
+  })();
+</script>
