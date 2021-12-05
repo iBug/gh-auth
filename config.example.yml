@@ -16,6 +16,6 @@ cas:
   redirect_uri: "https://ghauth.taokystrong.com/auth-ustc"
 
 session_key: <%= ENV['SESSION_KEY'] %>
-session_expiry: 3600
+session_expiry: 900
 token_key: <%= ENV['TOKEN_KEY'] %>
 # Note: No token expiry

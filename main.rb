@@ -86,6 +86,7 @@ class RequestHandler
   def state
     @state ||= begin
       return cookies['state'] if cookies&.key? 'state'
+
       s = SecureRandom.hex(16)
       set_cookie 'state', s, Time.now + CONFIG['session_expiry']
       s
@@ -133,18 +134,20 @@ class RequestHandler
   end
 
   def auth_ustc
-    jump = "#{CONFIG['cas']['redirect_uri']}?#{URI.encode_www_form({cas_id: state})}"
-    service = "#{CONFIG['cas']['redirector']}?#{URI.encode_www_form({jump: jump})}"
+    jump = "#{CONFIG['cas']['redirect_uri']}?#{URI.encode_www_form({ cas_id: state })}"
+    service = "#{CONFIG['cas']['redirector']}?#{URI.encode_www_form({ jump: jump })}"
     ticket = @req_params['ticket']
-    return redirect "#{CONFIG['cas']['url']}?#{URI.encode_www_form({service: service})}" unless ticket
+    return redirect "#{CONFIG['cas']['url']}?#{URI.encode_www_form({ service: service })}" unless ticket
 
     raise unless @req_params['cas_id'] == state
-    res = Net::HTTP.get_response(URI("#{CONFIG['cas']['validate']}?#{URI.encode_www_form({"service": service, "ticket": ticket})}"))
+
+    res = Net::HTTP.get_response(URI("#{CONFIG['cas']['validate']}?#{URI.encode_www_form({ "service": service, "ticket": ticket })}"))
     raise unless res.is_a? Net::HTTPSuccess
 
     xml = REXML::Document.new res.body
     raise unless xml.root.namespaces['cas'] == 'http://www.yale.edu/tp/cas'
     raise unless xml.root.elements[1].name == 'authenticationSuccess'
+
     @user_ustc = REXML::XPath.match(xml, '//cas:serviceResponse/cas:authenticationSuccess/cas:user').first.text
     warn "Authenticated with USTC user #{@user_ustc.inspect}"
 
@@ -196,10 +199,21 @@ class RequestHandler
     @token = content['token']
     return if @token.nil? || @token.empty?
 
+    unless @token =~ /^\w+:[\w-]+:\w+$/
+      @token_valid = false
+      @token_reason = 'Bad token format'
+      return
+    end
+
     payload, _, sig = @token.rpartition(':')
     hmac = hmac_signature(CONFIG['token_key'], payload)
-    @validate_token = hmac == sig
-  rescue StandardError => e
+    if hmac == sig
+      @token_valid = true
+      @token_ustc, @token_github = payload.split(':')
+    else
+      @token_valid = false
+      @token_reason = 'Bad signature'
+    end
   end
 
   def handle

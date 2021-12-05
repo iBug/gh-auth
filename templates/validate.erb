@@ -8,14 +8,14 @@
       </div>
       <button type="submit" class="btn btn-primary">Check</button>
     </form>
-    <% unless @validate_token.nil? %>
-      <% if @validate_token %>
+    <% unless @token_valid.nil? %>
+      <% if @token_valid %>
         <div class="alert alert-success mt-3" role="alert">
-          <strong>Good</strong>: The token <code><%= h(@token) %></code> is valid.
+          <strong>Valid token</strong> <code><%= h(@token) %></code> from user: USTC <%= h(@token_ustc) %> / GitHub <%= h(@token_github) %>.
         </div>
       <% else %>
         <div class="alert alert-danger mt-3" role="alert">
-          <strong>Bad</strong>: The token <code><%= h(@token) %></code> is invalid.
+          <strong>Invalid token</strong> <code><%= h(@token) %></code>: <%= h(@token_reason || 'unknown error').capitalize %>.
         </div>
       <% end %>
     <% end %>
