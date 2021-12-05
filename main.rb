@@ -14,7 +14,7 @@ require 'yaml'
 TEMPLATE_DIR = 'templates'
 CONFIG = YAML.load_file('config.yml')
 
-def hmac_sha1(key, data)
+def hmac_signature(key, data)
   digest = OpenSSL::Digest.new('sha1')
   OpenSSL::HMAC.hexdigest(digest, key, data)
 end
@@ -55,6 +55,7 @@ class RequestHandler
     @res_body = ''
     @res_code = 200
     @res_headers = { 'Content-Type' => 'text/plain' }
+    @res_cookies = []
   end
 
   def h(s)
@@ -74,7 +75,10 @@ class RequestHandler
   end
 
   def cookies
-    @cookies ||= CGI::Cookie.parse(@req_headers['Cookie'])
+    @cookies ||= @event['cookies'].map do |cookie|
+      c = CGI::Cookie.parse(cookie.split(';', 2)[0]).first
+      [c[0], c[1][0]]
+    end.to_h
   end
 
   def set_cookie(name, value = nil, expires = nil)
@@ -83,27 +87,28 @@ class RequestHandler
       value = ''
       expires = Time.at 0
     end
-    @res_headers['Set-Cookie'] ||= []
-    @res_headers['Set-Cookie'] << CGI::Cookie.new('name' => name, 'value' => value, 'path' => '/', 'expires' => expires).to_s
+    @res_cookies << CGI::Cookie.new('name' => name, 'value' => value, 'path' => '/', 'expires' => expires).to_s
   end
 
   def id_from_cookie(cookie_name)
-    return unless cookies.key? cookie_name
+    return unless cookies&.key? cookie_name
 
     id, timestamp, sig = cookies[cookie_name].split(':')
-    hmac = hmac_sha1(CONFIG['session_key'], "#{id}:#{timestamp}")
+    hmac = hmac_signature(CONFIG['session_key'], "#{id}:#{timestamp}")
     raise unless hmac == sig
     raise unless Time.now.to_i < timestamp.to_i + CONFIG['session_expiry']
 
     id
   rescue StandardError => e
-    set_cookie cookie_name
+    $stderr.puts ([e.message] + e.backtrace).join $/
+    #set_cookie cookie_name
+    nil
   end
 
   def id_to_cookie(cookie_name, id)
     now = Time.now
     payload = "#{id}:#{now.to_i}"
-    sig = hmac_sha1(CONFIG['session_key'], payload)
+    sig = hmac_signature(CONFIG['session_key'], payload)
     set_cookie cookie_name, "#{payload}:#{sig}", now + CONFIG['session_expiry']
     sig
   end
@@ -116,11 +121,42 @@ class RequestHandler
     @user_github ||= id_from_cookie 'user_github'
   end
 
+  def auth_ustc; end
+
+  def auth_github
+    unless @req_params['code'] && @req_params['state']
+      state = SecureRandom.hex(16)
+      set_cookie 'state', state, Time.now + CONFIG['session_expiry']
+      query = URI.encode_www_form({ client_id: CONFIG['github']['client_id'], redirect_uri: CONFIG['github']['redirect_uri'], state: state })
+      return redirect "#{CONFIG['github']['auth_url']}?#{query}"
+    end
+
+    uri = URI(CONFIG['github']['validate_url']) # "Accept": "application/json"
+    uri.query = URI.encode_www_form({ client_id: CONFIG['github']['client_id'], client_secret: CONFIG['github']['client_secret'], code: @req_params['code'] })
+    res = Net::HTTP.post(uri, nil, 'Accept' => 'application/json')
+    raise unless res.is_a? Net::HTTPSuccess
+
+    access_token = JSON.parse(res.body)['access_token']
+    uri = URI(CONFIG['github']['user_api'])
+    req = Net::HTTP::Get.new(uri)
+    req['Authorization'] = "token #{access_token}"
+    res = Net::HTTP.start(uri.hostname, uri.port, use_ssl: uri.scheme == 'https') { |http| http.request(req) }
+    raise unless res.is_a? Net::HTTPSuccess
+
+    @user_github = JSON.parse(res.body)['login']
+    warn "Authenticated with GitHub user #{@user_github.inspect}"
+
+    now = Time.now
+    payload = "#{@user_github}:#{now.to_i}"
+    set_cookie 'user_github', "#{payload}:#{hmac_signature(CONFIG['session_key'], payload)}", now + CONFIG['session_expiry']
+    redirect './'
+  end
+
   def token
     return unless user_ustc && user_github
 
     payload = "#{user_ustc}:#{user_github}"
-    sig = hmac_sha1(CONFIG['token_key'], payload)
+    sig = hmac_signature(CONFIG['token_key'], payload)
     @token ||= "#{payload}:#{sig}"
   end
 
@@ -130,8 +166,9 @@ class RequestHandler
     content = URI.decode_www_form(@req_body).to_h
     @token = content['token']
     return if @token.nil? || @token.empty?
+
     payload, _, sig = @token.rpartition(':')
-    hmac = hmac_sha1(CONFIG['token_key'], payload)
+    hmac = hmac_signature(CONFIG['token_key'], payload)
     @validate_token = hmac == sig
   rescue StandardError => e
   end
@@ -140,8 +177,15 @@ class RequestHandler
     case @req_path
     when '/'
       render 'index'
+    when '/about'
+      render 'about'
     when '/robots.txt'
       @res_body = "User-agent: *\nDisallow: /\n"
+
+    when '/auth-ustc'
+      auth_ustc
+    when '/auth-github'
+      auth_github
 
     when '/logout'
       set_cookie 'user_ustc'
@@ -162,13 +206,13 @@ class RequestHandler
       @res_code = 404
     end
 
-    [@res_body, @res_code, @res_headers]
+    [@res_body, @res_code, @res_headers, @res_cookies]
   end
 end
 
 # For AWS Lambda invocation
 def entrypoint(event:, context:)
-  output, status_code, headers = RequestHandler.new(event).handle
+  output, status_code, headers, cookies = RequestHandler.new(event).handle
 
   headers['Content-Type'] ||= 'text/plain'
   mvheaders, headers = headers.partition { |_, v| v.is_a? Array }.map(&:to_h)
@@ -178,9 +222,9 @@ def entrypoint(event:, context:)
       headers[k_] = v_
     end
   end
-  { statusCode: status_code, headers: headers, body: output }
+  { statusCode: status_code, headers: headers, body: output, cookies: cookies }
 rescue StandardError => e
-  warn ([e.message] + e.backtrace).join $/
+  $stderr.puts ([e.message] + e.backtrace).join $/
   { statusCode: 500, headers: { 'Content-Type' => 'text/plain' }, body: "Internal Server Error\n" }
 end
 
