@@ -5,12 +5,15 @@ github:
 
   client_id: "Register your client on GitHub!"
   client_secret: "Register your client on GitHub!"
+  redirect_uri: "https://example.com/auth-github"
 
 cas:
   url: "https://passport.ustc.edu.cn/login"
   validate: "https://passport.ustc.edu.cn/serviceValidate"
-  redirect: "http://home.ustc.edu.cn/~zzh1996/cas_redirect.html"
+  redirector: "http://home.ustc.edu.cn/~zzh1996/cas_redirect.html"
   logout: "https://passport.ustc.edu.cn/logout"
+
+  redirect_uri: "https://example.com/auth-ustc"
 
 session_key: "Secret for cookie signature"
 session_expiry: 600

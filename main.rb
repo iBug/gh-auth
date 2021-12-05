@@ -7,6 +7,8 @@ require 'erb'
 require 'json'
 require 'net/http'
 require 'openssl'
+require 'rexml/document'
+require 'rexml/xpath'
 require 'securerandom'
 require 'time'
 require 'yaml'
@@ -81,6 +83,15 @@ class RequestHandler
     end.to_h
   end
 
+  def state
+    @state ||= begin
+      return cookies['state'] if cookies&.key? 'state'
+      s = SecureRandom.hex(16)
+      set_cookie 'state', s, Time.now + CONFIG['session_expiry']
+      s
+    end
+  end
+
   def set_cookie(name, value = nil, expires = nil)
     expires ||= Time.now + CONFIG['session_expiry']
     if value.nil?
@@ -100,8 +111,8 @@ class RequestHandler
 
     id
   rescue StandardError => e
-    $stderr.puts ([e.message] + e.backtrace).join $/
-    #set_cookie cookie_name
+    warn ([e.message] + e.backtrace).join $/
+    set_cookie cookie_name
     nil
   end
 
@@ -121,12 +132,30 @@ class RequestHandler
     @user_github ||= id_from_cookie 'user_github'
   end
 
-  def auth_ustc; end
+  def auth_ustc
+    jump = "#{CONFIG['cas']['redirect_uri']}?#{URI.encode_www_form({cas_id: state})}"
+    service = "#{CONFIG['cas']['redirector']}?#{URI.encode_www_form({jump: jump})}"
+    ticket = @req_params['ticket']
+    return redirect "#{CONFIG['cas']['url']}?#{URI.encode_www_form({service: service})}" unless ticket
+
+    raise unless @req_params['cas_id'] == state
+    res = Net::HTTP.get_response(URI("#{CONFIG['cas']['validate']}?#{URI.encode_www_form({"service": service, "ticket": ticket})}"))
+    raise unless res.is_a? Net::HTTPSuccess
+
+    xml = REXML::Document.new res.body
+    raise unless xml.root.namespaces['cas'] == 'http://www.yale.edu/tp/cas'
+    raise unless xml.root.elements[1].name == 'authenticationSuccess'
+    @user_ustc = REXML::XPath.match(xml, '//cas:serviceResponse/cas:authenticationSuccess/cas:user').first.text
+    warn "Authenticated with USTC user #{@user_ustc.inspect}"
+
+    now = Time.now
+    payload = "#{@user_ustc}:#{now.to_i}"
+    set_cookie 'user_ustc', "#{payload}:#{hmac_signature(CONFIG['session_key'], payload)}", now + CONFIG['session_expiry']
+    redirect './'
+  end
 
   def auth_github
     unless @req_params['code'] && @req_params['state']
-      state = SecureRandom.hex(16)
-      set_cookie 'state', state, Time.now + CONFIG['session_expiry']
       query = URI.encode_www_form({ client_id: CONFIG['github']['client_id'], redirect_uri: CONFIG['github']['redirect_uri'], state: state })
       return redirect "#{CONFIG['github']['auth_url']}?#{query}"
     end
@@ -224,7 +253,7 @@ def entrypoint(event:, context:)
   end
   { statusCode: status_code, headers: headers, body: output, cookies: cookies }
 rescue StandardError => e
-  $stderr.puts ([e.message] + e.backtrace).join $/
+  warn ([e.message] + e.backtrace).join $/
   { statusCode: 500, headers: { 'Content-Type' => 'text/plain' }, body: "Internal Server Error\n" }
 end
 
