@@ -77,7 +77,7 @@ class RequestHandler
   end
 
   def cookies
-    @cookies ||= @event['cookies'].map do |cookie|
+    @cookies ||= (@event['cookies'] || []).map do |cookie|
       c = CGI::Cookie.parse(cookie.split(';', 2)[0]).first
       [c[0], c[1][0]]
     end.to_h
