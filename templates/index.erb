@@ -3,6 +3,9 @@
   <div class="card-body">
     <p>Your USTC user: <%= user_ustc || '(unauthenticated)' %></p>
     <p>Your GitHub user: <%= user_github || '(unauthenticated)' %></p>
+    <% unless user_ustc && user_github %>
+     <p>You need to authenticate with both USTC and GitHub before you can generate a token.</p>
+    <% end %>
   </div>
   <div class="card-footer btn-space-y">
     <a href="auth-ustc" class="btn btn-primary">Authenticate USTC</a>
