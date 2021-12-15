@@ -22,7 +22,7 @@ end
 task :publish => ZIP_FILE do
   File.open ZIP_FILE, 'rb' do |f|
     Aws::Lambda::Client.new.update_function_code({
-      function_name: ENV['AWS_FUNCTION_NAME'],
+      function_name: ENV['AWS_FUNCTION_NAME'] || 'GHAuth',
       zip_file: f,
       publish: true,
     })
