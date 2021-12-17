@@ -3,8 +3,10 @@
   <div class="card-body">
     <p>Your USTC user: <%= user_ustc || '(unauthenticated)' %></p>
     <p>Your GitHub user: <%= user_github || '(unauthenticated)' %></p>
+    <p>If you have any question, please contact us at <img src="https://lug.ustc.edu.cn/static/email.png" alt="noreply@github.com" />.</p>
     <% unless user_ustc && user_github %>
-     <p>You need to authenticate with both USTC and GitHub before you can generate a token.</p>
+      <hr/>
+      <p>You need to authenticate with both USTC and GitHub before you can generate a token.</p>
     <% end %>
   </div>
   <div class="card-footer btn-space-y">
