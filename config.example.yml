@@ -1,21 +1,28 @@
-github:
-  auth_url: "https://github.com/login/oauth/authorize"
-  validate_url: "https://github.com/login/oauth/access_token"
-  user_api: "https://api.github.com/user"
+$default: &default
+  github:
+    auth_url: "https://github.com/login/oauth/authorize"
+    validate_url: "https://github.com/login/oauth/access_token"
+    user_api: "https://api.github.com/user"
 
-  client_id: <%= ENV['GITHUB_CLIENT_ID'] %>
-  client_secret: <%= ENV['GITHUB_CLIENT_SECRET'] %>
-  redirect_uri: "https://ghauth.taokystrong.com/auth-github"
+    client_id: <%= ENV['GITHUB_CLIENT_ID'] %>
+    client_secret: <%= ENV['GITHUB_CLIENT_SECRET'] %>
+    redirect_uri: "https://ghauth.taokystrong.com/auth-github"
 
-cas:
-  url: "https://passport.ustc.edu.cn/login"
-  validate: "https://passport.ustc.edu.cn/serviceValidate"
-  redirector: "http://home.ustc.edu.cn/~zzh1996/cas_redirect.html"
-  logout: "https://passport.ustc.edu.cn/logout"
+  cas:
+    url: "https://passport.ustc.edu.cn/login"
+    validate: "https://passport.ustc.edu.cn/serviceValidate"
+    redirector: "http://home.ustc.edu.cn/~zzh1996/cas_redirect.html"
+    logout: "https://passport.ustc.edu.cn/logout"
 
-  redirect_uri: "https://ghauth.taokystrong.com/auth-ustc"
+    redirect_uri: "https://ghauth.taokystrong.com/auth-ustc"
 
-session_key: <%= ENV['SESSION_KEY'] %>
-session_expiry: 900
-token_key: <%= ENV['TOKEN_KEY'] %>
-# Note: No token expiry
+  session_key: <%= ENV['SESSION_KEY'] %>
+  session_expiry: 900
+  token_key: <%= ENV['TOKEN_KEY'] %>
+  # Note: No token expiry
+
+test:
+  <<: *default
+  session_key: <%= ENV['SESSION_KEY_test'] %>
+  session_expiry: 3600
+  token_key: <%= ENV['TOKEN_KEY_test'] %>

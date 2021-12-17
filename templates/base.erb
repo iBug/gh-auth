@@ -12,7 +12,8 @@
     </style>
   </head>
   <body class="d-flex flex-column min-vh-100">
-    <nav class="navbar navbar-expand navbar-light px-3 mb-3 bg-light shadow-sm d-flex">
+    <% color_scheme = production? ? 'light' : 'dark' %>
+    <nav class="navbar navbar-expand navbar-<%= color_scheme %> px-3 mb-3 bg-<%= color_scheme %> shadow-sm d-flex">
       <a class="navbar-brand" href="./"><i class="fas fa-lg fa-fw fa-id-badge"></i> GH-Auth</a>
       <ul class="navbar-nav mr-auto">
         <li class="nav-item">

@@ -14,7 +14,7 @@ require 'time'
 require 'yaml'
 
 TEMPLATE_DIR = 'templates'
-CONFIG = YAML.load(ERB.new(File.read('config.yml')).result)
+CONFIG = YAML.load(ERB.new(File.read('config.yml')).result)[ENV['API_STAGE'] || '$default']
 
 def hmac_signature(key, data)
   digest = OpenSSL::Digest.new('sha1')
@@ -22,11 +22,13 @@ def hmac_signature(key, data)
 end
 
 class Template
+  attr_reader :template
+
   def initialize(name = 'base')
     @template = self.class.get(name)
   end
 
-  def render
+  def render(binding)
     @template.result(binding)
   end
 
@@ -45,10 +47,12 @@ class RequestHandler
   def initialize(event)
     @event = event
     @context = event['requestContext']
+    @stage = @context['stage']
 
     @req_method = @context['http']['method'].upcase
     @req_host = @context['domainName']
     @req_path = @event['rawPath']
+    @req_path = @req_path.delete_prefix "/#{@stage}" unless @stage == '$default'
     @req_params = @event['queryStringParameters'] || {}
     @req_headers = @event['headers']
     @req_body = @event['body']
@@ -64,8 +68,16 @@ class RequestHandler
     CGI.escapeHTML s
   end
 
+  def production?
+    @production ||= @stage == '$default'
+  end
+
+  def render_layout
+    Template.base.render binding
+  end
+
   def render(template)
-    @res_body = Template.base.render do
+    @res_body = render_layout do
       Template.get(template).result(binding)
     end
     @res_headers['Content-Type'] = 'text/html'
@@ -245,6 +257,7 @@ class RequestHandler
       validate_token if @req_method == 'POST'
       render 'validate'
     else
+      warn @event
       @res_body = "Not found\n"
       @res_code = 404
     end
