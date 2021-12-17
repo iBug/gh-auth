@@ -14,7 +14,7 @@ require 'time'
 require 'yaml'
 
 TEMPLATE_DIR = 'templates'
-CONFIG = YAML.load(ERB.new(File.read('config.yml')).result)[ENV['API_STAGE'] || '$default']
+CONFIG = YAML.load(ERB.new(File.read('config.yml')).result)
 
 def hmac_signature(key, data)
   digest = OpenSSL::Digest.new('sha1')
@@ -47,7 +47,7 @@ class RequestHandler
   def initialize(event)
     @event = event
     @context = event['requestContext']
-    @stage = @context['stage']
+    @stage = @context['stage'] || '$default'
 
     @req_method = @context['http']['method'].upcase
     @req_host = @context['domainName']
@@ -70,6 +70,10 @@ class RequestHandler
 
   def production?
     @production ||= @stage == '$default'
+  end
+
+  def config
+    @config ||= CONFIG[@stage]
   end
 
   def render_layout
@@ -100,13 +104,13 @@ class RequestHandler
       return cookies['state'] if cookies&.key? 'state'
 
       s = SecureRandom.hex(16)
-      set_cookie 'state', s, Time.now + CONFIG['session_expiry']
+      set_cookie 'state', s, Time.now + config['session_expiry']
       s
     end
   end
 
   def set_cookie(name, value = nil, expires = nil)
-    expires ||= Time.now + CONFIG['session_expiry']
+    expires ||= Time.now + config['session_expiry']
     if value.nil?
       value = ''
       expires = Time.at 0
@@ -118,9 +122,9 @@ class RequestHandler
     return unless cookies&.key? cookie_name
 
     id, timestamp, sig = cookies[cookie_name].split(':')
-    hmac = hmac_signature(CONFIG['session_key'], "#{id}:#{timestamp}")
+    hmac = hmac_signature(config['session_key'], "#{id}:#{timestamp}")
     raise unless hmac == sig
-    raise unless Time.now.to_i < timestamp.to_i + CONFIG['session_expiry']
+    raise unless Time.now.to_i < timestamp.to_i + config['session_expiry']
 
     id
   rescue StandardError => e
@@ -132,8 +136,8 @@ class RequestHandler
   def id_to_cookie(cookie_name, id)
     now = Time.now
     payload = "#{id}:#{now.to_i}"
-    sig = hmac_signature(CONFIG['session_key'], payload)
-    set_cookie cookie_name, "#{payload}:#{sig}", now + CONFIG['session_expiry']
+    sig = hmac_signature(config['session_key'], payload)
+    set_cookie cookie_name, "#{payload}:#{sig}", now + config['session_expiry']
     sig
   end
 
@@ -146,14 +150,14 @@ class RequestHandler
   end
 
   def auth_ustc
-    jump = "#{CONFIG['cas']['redirect_uri']}?#{URI.encode_www_form({ cas_id: state })}"
-    service = "#{CONFIG['cas']['redirector']}?#{URI.encode_www_form({ jump: jump })}"
+    jump = "#{config['cas']['redirect_uri']}?#{URI.encode_www_form({ cas_id: state })}"
+    service = "#{config['cas']['redirector']}?#{URI.encode_www_form({ jump: jump })}"
     ticket = @req_params['ticket']
-    return redirect "#{CONFIG['cas']['url']}?#{URI.encode_www_form({ service: service })}" unless ticket
+    return redirect "#{config['cas']['url']}?#{URI.encode_www_form({ service: service })}" unless ticket
 
     raise unless @req_params['cas_id'] == state
 
-    res = Net::HTTP.get_response(URI("#{CONFIG['cas']['validate']}?#{URI.encode_www_form({ "service": service, "ticket": ticket })}"))
+    res = Net::HTTP.get_response(URI("#{config['cas']['validate']}?#{URI.encode_www_form({ "service": service, "ticket": ticket })}"))
     raise unless res.is_a? Net::HTTPSuccess
 
     xml = REXML::Document.new res.body
@@ -165,23 +169,23 @@ class RequestHandler
 
     now = Time.now
     payload = "#{@user_ustc}:#{now.to_i}"
-    set_cookie 'user_ustc', "#{payload}:#{hmac_signature(CONFIG['session_key'], payload)}", now + CONFIG['session_expiry']
+    set_cookie 'user_ustc', "#{payload}:#{hmac_signature(config['session_key'], payload)}", now + config['session_expiry']
     redirect './'
   end
 
   def auth_github
     unless @req_params['code'] && @req_params['state']
-      query = URI.encode_www_form({ client_id: CONFIG['github']['client_id'], redirect_uri: CONFIG['github']['redirect_uri'], state: state })
-      return redirect "#{CONFIG['github']['auth_url']}?#{query}"
+      query = URI.encode_www_form({ client_id: config['github']['client_id'], redirect_uri: config['github']['redirect_uri'], state: state })
+      return redirect "#{config['github']['auth_url']}?#{query}"
     end
 
-    uri = URI(CONFIG['github']['validate_url']) # "Accept": "application/json"
-    uri.query = URI.encode_www_form({ client_id: CONFIG['github']['client_id'], client_secret: CONFIG['github']['client_secret'], code: @req_params['code'] })
+    uri = URI(config['github']['validate_url']) # "Accept": "application/json"
+    uri.query = URI.encode_www_form({ client_id: config['github']['client_id'], client_secret: config['github']['client_secret'], code: @req_params['code'] })
     res = Net::HTTP.post(uri, nil, 'Accept' => 'application/json')
     raise unless res.is_a? Net::HTTPSuccess
 
     access_token = JSON.parse(res.body)['access_token']
-    uri = URI(CONFIG['github']['user_api'])
+    uri = URI(config['github']['user_api'])
     req = Net::HTTP::Get.new(uri)
     req['Authorization'] = "token #{access_token}"
     res = Net::HTTP.start(uri.hostname, uri.port, use_ssl: uri.scheme == 'https') { |http| http.request(req) }
@@ -192,7 +196,7 @@ class RequestHandler
 
     now = Time.now
     payload = "#{@user_github}:#{now.to_i}"
-    set_cookie 'user_github', "#{payload}:#{hmac_signature(CONFIG['session_key'], payload)}", now + CONFIG['session_expiry']
+    set_cookie 'user_github', "#{payload}:#{hmac_signature(config['session_key'], payload)}", now + config['session_expiry']
     redirect './'
   end
 
@@ -200,7 +204,7 @@ class RequestHandler
     return unless user_ustc && user_github
 
     payload = "#{user_ustc}:#{user_github}"
-    sig = hmac_signature(CONFIG['token_key'], payload)
+    sig = hmac_signature(config['token_key'], payload)
     @token ||= "#{payload}:#{sig}"
   end
 
@@ -218,7 +222,7 @@ class RequestHandler
     end
 
     payload, _, sig = @token.rpartition(':')
-    hmac = hmac_signature(CONFIG['token_key'], payload)
+    hmac = hmac_signature(config['token_key'], payload)
     if hmac == sig
       @token_valid = true
       @token_ustc, @token_github = payload.split(':')
@@ -247,7 +251,7 @@ class RequestHandler
       set_cookie 'user_github'
       render 'logout'
     when '/logout-ustc'
-      redirect CONFIG['cas']['logout']
+      redirect config['cas']['logout']
     when '/logout-github'
       redirect './'
 
