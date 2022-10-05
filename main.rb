@@ -16,6 +16,15 @@ require 'yaml'
 TEMPLATE_DIR = 'templates'
 CONFIG = YAML.load(ERB.new(File.read('config.yml')).result)
 
+def log(data)
+  if data.is_a? String
+    puts data.strip
+  else
+    JSON.dump(data, $stdout)
+  end
+  nil
+end
+
 def hmac_signature(key, data)
   digest = OpenSSL::Digest.new('sha1')
   OpenSSL::HMAC.hexdigest(digest, key, data)
@@ -270,8 +279,21 @@ class RequestHandler
   end
 end
 
+def lambda_log_event(event)
+  headers = event['headers']
+  req_ctx = event['requestContext']
+  data = {
+    'ip' => headers['cf-connecting-ip'] || 'unknown',
+    'user-agent' => headers['user-agent'],
+    'path' => event['rawPath'],
+    'query' => event['queryStringParameters'],
+  }
+  log data
+end
+
 # For AWS Lambda invocation
 def entrypoint(event:, context:)
+  lambda_log_event event if ENV.key? 'AWS_LAMBDA_FUNCTION_NAME'
   output, status_code, headers, cookies = RequestHandler.new(event).handle
 
   headers['Content-Type'] ||= 'text/plain'
